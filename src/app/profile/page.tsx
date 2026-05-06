@@ -218,7 +218,11 @@ export default function ProfilePage() {
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: "var(--text-secondary)" }}>
             <span>AI Engine</span>
-            <span style={{ fontWeight: 600 }}>Ooddle AI (Mock)</span>
+            <span style={{ fontWeight: 600 }}>Llama 3.3 70B (Multi-Agent)</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: "var(--text-secondary)" }}>
+            <span>Pillar Sub-Agents</span>
+            <span style={{ fontWeight: 600 }}>5 specialized routes</span>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: "var(--text-secondary)" }}>
             <span>Data Storage</span>

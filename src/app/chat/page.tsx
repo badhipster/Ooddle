@@ -4,13 +4,13 @@ import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Sparkles, Bot } from "lucide-react";
 import { useStore, ChatMessage } from "@/lib/store";
-import { getAIResponse, getQuickReplies } from "@/lib/ai";
+import { streamAIResponse, getQuickReplies } from "@/lib/ai";
 import { PILLARS, PillarId } from "@/lib/constants";
 
 export default function ChatPage() {
-  const { state, addChatMessage } = useStore();
+  const { state, addChatMessage, updateChatMessage } = useStore();
   const [input, setInput] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   const [quickReplies, setQuickReplies] = useState<string[]>(getQuickReplies());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -21,15 +21,15 @@ export default function ChatPage() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [state.chatMessages, isTyping]);
+  }, [state.chatMessages, isStreaming]);
 
-  // Send welcome message if no messages
+  // Welcome message
   useEffect(() => {
     if (state.chatMessages.length === 0) {
       const welcome: ChatMessage = {
         id: Date.now().toString(),
         role: "assistant",
-        content: `Hey ${state.user?.name?.split(" ")[0] || "there"}! 🌿 I'm Ooddle, your personal wellness companion. I'm here to help you feel amazing across all five pillars of health — metabolic, movement, cognition, recovery, and supplements.\n\nWhat would you like to explore today?`,
+        content: `Hey ${state.user?.name?.split(" ")[0] || "there"}! 🌿 I'm Ooddle, your personal wellness companion. I'm here to help across all five pillars of health — metabolic, movement, cognition, recovery, and supplements.\n\nWhat would you like to explore today?`,
         timestamp: new Date().toISOString(),
       };
       addChatMessage(welcome);
@@ -38,40 +38,58 @@ export default function ChatPage() {
   }, []);
 
   const sendMessage = async (text: string) => {
-    if (!text.trim()) return;
+    const trimmed = text.trim();
+    if (!trimmed || isStreaming) return;
 
     const userMsg: ChatMessage = {
-      id: Date.now().toString(),
+      id: `user-${Date.now()}`,
       role: "user",
-      content: text.trim(),
+      content: trimmed,
       timestamp: new Date().toISOString(),
     };
     addChatMessage(userMsg);
     setInput("");
-    setIsTyping(true);
+    setIsStreaming(true);
 
+    const aiMsgId = `ai-${Date.now()}`;
+    const aiMsg: ChatMessage = {
+      id: aiMsgId,
+      role: "assistant",
+      content: "",
+      timestamp: new Date().toISOString(),
+    };
+    addChatMessage(aiMsg);
+
+    const history = state.chatMessages
+      .filter((m) => m.content.trim().length > 0)
+      .slice(-10)
+      .map((m) => ({ role: m.role, content: m.content }));
+
+    let accumulated = "";
+    let lastPillar: string | null = null;
     try {
-      const response = await getAIResponse(text);
-
-      const aiMsg: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: response.content,
-        timestamp: new Date().toISOString(),
-        pillar: response.pillar,
-      };
-      addChatMessage(aiMsg);
-      setQuickReplies(getQuickReplies(response));
+      for await (const chunk of streamAIResponse(trimmed, history, state.user)) {
+        if (chunk.type === "meta") {
+          lastPillar = chunk.pillar ?? null;
+          if (lastPillar) {
+            updateChatMessage(aiMsgId, { pillar: lastPillar as PillarId });
+          }
+        } else if (chunk.type === "text" && chunk.text) {
+          accumulated += chunk.text;
+          updateChatMessage(aiMsgId, { content: accumulated });
+        } else if (chunk.type === "error") {
+          updateChatMessage(aiMsgId, {
+            content: "Oops, I had a moment there! 😅 Could you try asking me again?",
+          });
+        }
+      }
     } catch {
-      const errorMsg: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
+      updateChatMessage(aiMsgId, {
         content: "Oops, I had a moment there! 😅 Could you try asking me again?",
-        timestamp: new Date().toISOString(),
-      };
-      addChatMessage(errorMsg);
+      });
     } finally {
-      setIsTyping(false);
+      setIsStreaming(false);
+      setQuickReplies(getQuickReplies(lastPillar));
     }
   };
 
@@ -92,7 +110,6 @@ export default function ChatPage() {
         border: "1px solid var(--border-light)",
       }}
     >
-      {/* Chat header */}
       <div
         style={{
           padding: "16px 20px",
@@ -137,12 +154,11 @@ export default function ChatPage() {
                 background: "var(--ooddle-primary)",
               }}
             />
-            Online — Your Wellness Guide
+            Online — Multi-Agent Wellness Coach
           </div>
         </div>
       </div>
 
-      {/* Messages area */}
       <div
         style={{
           flex: 1,
@@ -154,134 +170,127 @@ export default function ChatPage() {
         }}
       >
         <AnimatePresence>
-          {state.chatMessages.map((msg) => (
-            <motion.div
-              key={msg.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-              style={{
-                display: "flex",
-                justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
-                gap: 10,
-              }}
-            >
-              {msg.role === "assistant" && (
-                <div
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: "50%",
-                    background: "linear-gradient(135deg, var(--ooddle-primary), var(--pillar-cognition))",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                    marginTop: 2,
-                  }}
-                >
-                  <Sparkles size={14} color="white" />
-                </div>
-              )}
+          {state.chatMessages.map((msg, idx) => {
+            const isLast = idx === state.chatMessages.length - 1;
+            const isStreamingThis = isStreaming && isLast && msg.role === "assistant";
+            const isEmptyStreaming = isStreamingThis && !msg.content;
 
-              <div style={{ maxWidth: "75%" }}>
-                {msg.pillar && (
+            return (
+              <motion.div
+                key={msg.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+                style={{
+                  display: "flex",
+                  justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
+                  gap: 10,
+                }}
+              >
+                {msg.role === "assistant" && (
                   <div
                     style={{
-                      display: "inline-flex",
+                      width: 32,
+                      height: 32,
+                      borderRadius: "50%",
+                      background: "linear-gradient(135deg, var(--ooddle-primary), var(--pillar-cognition))",
+                      display: "flex",
                       alignItems: "center",
-                      gap: 4,
-                      padding: "2px 10px",
-                      borderRadius: "var(--radius-full)",
-                      backgroundColor: PILLARS[msg.pillar as PillarId]?.bgColor,
-                      color: PILLARS[msg.pillar as PillarId]?.darkColor,
-                      fontSize: 11,
-                      fontWeight: 600,
-                      marginBottom: 6,
+                      justifyContent: "center",
+                      flexShrink: 0,
+                      marginTop: 2,
                     }}
                   >
-                    {PILLARS[msg.pillar as PillarId]?.emoji} {PILLARS[msg.pillar as PillarId]?.name}
+                    <Sparkles size={14} color="white" />
                   </div>
                 )}
-                <div
-                  className={msg.role === "user" ? "chat-bubble-user" : "chat-bubble-ai"}
-                  style={{
-                    padding: "12px 16px",
-                    fontSize: 14,
-                    lineHeight: 1.6,
-                    whiteSpace: "pre-wrap",
-                  }}
-                >
-                  {msg.content}
-                </div>
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: "var(--text-tertiary)",
-                    marginTop: 4,
-                    textAlign: msg.role === "user" ? "right" : "left",
-                    paddingLeft: msg.role === "assistant" ? 4 : 0,
-                    paddingRight: msg.role === "user" ? 4 : 0,
-                  }}
-                >
-                  {new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
 
-        {/* Typing indicator */}
-        {isTyping && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            style={{ display: "flex", gap: 10, alignItems: "center" }}
-          >
-            <div
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: "50%",
-                background: "linear-gradient(135deg, var(--ooddle-primary), var(--pillar-cognition))",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-              }}
-            >
-              <Sparkles size={14} color="white" />
-            </div>
-            <div
-              className="chat-bubble-ai"
-              style={{
-                padding: "12px 20px",
-                display: "flex",
-                gap: 6,
-              }}
-            >
-              {[0, 1, 2].map((i) => (
-                <motion.div
-                  key={i}
-                  animate={{ y: [0, -6, 0] }}
-                  transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.15 }}
-                  style={{
-                    width: 7,
-                    height: 7,
-                    borderRadius: "50%",
-                    background: "var(--text-tertiary)",
-                  }}
-                />
-              ))}
-            </div>
-          </motion.div>
-        )}
+                <div style={{ maxWidth: "75%" }}>
+                  {msg.pillar && (
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                        padding: "2px 10px",
+                        borderRadius: "var(--radius-full)",
+                        backgroundColor: PILLARS[msg.pillar as PillarId]?.bgColor,
+                        color: PILLARS[msg.pillar as PillarId]?.darkColor,
+                        fontSize: 11,
+                        fontWeight: 600,
+                        marginBottom: 6,
+                      }}
+                    >
+                      {PILLARS[msg.pillar as PillarId]?.emoji} {PILLARS[msg.pillar as PillarId]?.name}
+                    </div>
+                  )}
+                  {isEmptyStreaming ? (
+                    <div
+                      className="chat-bubble-ai"
+                      style={{
+                        padding: "12px 20px",
+                        display: "flex",
+                        gap: 6,
+                      }}
+                    >
+                      {[0, 1, 2].map((i) => (
+                        <motion.div
+                          key={i}
+                          animate={{ y: [0, -6, 0] }}
+                          transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.15 }}
+                          style={{
+                            width: 7,
+                            height: 7,
+                            borderRadius: "50%",
+                            background: "var(--text-tertiary)",
+                          }}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div
+                      className={msg.role === "user" ? "chat-bubble-user" : "chat-bubble-ai"}
+                      style={{
+                        padding: "12px 16px",
+                        fontSize: 14,
+                        lineHeight: 1.6,
+                        whiteSpace: "pre-wrap",
+                      }}
+                    >
+                      {msg.content}
+                      {isStreamingThis && msg.content && (
+                        <motion.span
+                          animate={{ opacity: [0.2, 1, 0.2] }}
+                          transition={{ duration: 1, repeat: Infinity }}
+                          style={{ display: "inline-block", marginLeft: 2 }}
+                        >
+                          ▋
+                        </motion.span>
+                      )}
+                    </div>
+                  )}
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: "var(--text-tertiary)",
+                      marginTop: 4,
+                      textAlign: msg.role === "user" ? "right" : "left",
+                      paddingLeft: msg.role === "assistant" ? 4 : 0,
+                      paddingRight: msg.role === "user" ? 4 : 0,
+                    }}
+                  >
+                    {new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  </div>
+                </div>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
 
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Quick replies */}
-      {!isTyping && quickReplies.length > 0 && (
+      {!isStreaming && quickReplies.length > 0 && (
         <div
           style={{
             padding: "8px 20px",
@@ -316,7 +325,6 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* Input area */}
       <form
         onSubmit={handleSubmit}
         style={{
@@ -334,7 +342,7 @@ export default function ChatPage() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask Ooddle anything about your wellness..."
-          disabled={isTyping}
+          disabled={isStreaming}
           style={{
             flex: 1,
             padding: "12px 16px",
@@ -348,17 +356,17 @@ export default function ChatPage() {
         />
         <button
           type="submit"
-          disabled={!input.trim() || isTyping}
+          disabled={!input.trim() || isStreaming}
           style={{
             width: 44,
             height: 44,
             borderRadius: "50%",
             border: "none",
             background:
-              input.trim() && !isTyping
+              input.trim() && !isStreaming
                 ? "linear-gradient(135deg, var(--ooddle-primary), var(--ooddle-primary-dark))"
                 : "var(--border-light)",
-            cursor: input.trim() && !isTyping ? "pointer" : "not-allowed",
+            cursor: input.trim() && !isStreaming ? "pointer" : "not-allowed",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -366,7 +374,7 @@ export default function ChatPage() {
             transition: "background 0.2s",
           }}
         >
-          <Send size={18} color={input.trim() && !isTyping ? "white" : "var(--text-tertiary)"} />
+          <Send size={18} color={input.trim() && !isStreaming ? "white" : "var(--text-tertiary)"} />
         </button>
       </form>
     </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from "react";
-import { MicroAction, PillarId, DEFAULT_MICRO_ACTIONS } from "./constants";
+import { MicroAction, PillarId, DEFAULT_MICRO_ACTIONS, selectPersonalizedActions } from "./constants";
 
 /* ── Types ── */
 export interface UserProfile {
@@ -46,6 +46,7 @@ type Action =
   | { type: "COMPLETE_ONBOARDING"; payload: Partial<UserProfile> }
   | { type: "TOGGLE_ACTION"; payload: string }
   | { type: "ADD_CHAT_MESSAGE"; payload: ChatMessage }
+  | { type: "UPDATE_CHAT_MESSAGE"; payload: { id: string; content?: string; pillar?: PillarId } }
   | { type: "SET_STATE"; payload: AppState };
 
 /* ── Helpers ── */
@@ -57,8 +58,13 @@ function getTodayStr() {
   return new Date().toISOString().split("T")[0];
 }
 
-function generateTodayActions(): MicroAction[] {
-  return DEFAULT_MICRO_ACTIONS.map((a) => ({
+function generateTodayActions(user?: UserProfile | null): MicroAction[] {
+  const personalized =
+    user && (user.goals.length > 0 || user.fitnessLevel)
+      ? selectPersonalizedActions(user.goals, user.fitnessLevel)
+      : DEFAULT_MICRO_ACTIONS;
+
+  return personalized.map((a) => ({
     ...a,
     id: generateId(),
     completed: false,
@@ -107,12 +113,16 @@ function appReducer(state: AppState, action: Action): AppState {
     case "LOGOUT":
       return { ...initialState, todayActions: generateTodayActions() };
 
-    case "COMPLETE_ONBOARDING":
+    case "COMPLETE_ONBOARDING": {
       if (!state.user) return state;
+      const updatedUser = { ...state.user, ...action.payload, onboardingCompleted: true };
+      // Regenerate today's actions based on the user's new preferences
       return {
         ...state,
-        user: { ...state.user, ...action.payload, onboardingCompleted: true },
+        user: updatedUser,
+        todayActions: generateTodayActions(updatedUser),
       };
+    }
 
     case "TOGGLE_ACTION": {
       const todayActions = state.todayActions.map((a) =>
@@ -140,6 +150,22 @@ function appReducer(state: AppState, action: Action): AppState {
     case "ADD_CHAT_MESSAGE":
       return { ...state, chatMessages: [...state.chatMessages, action.payload] };
 
+    case "UPDATE_CHAT_MESSAGE": {
+      const { id, content, pillar } = action.payload;
+      return {
+        ...state,
+        chatMessages: state.chatMessages.map((m) =>
+          m.id === id
+            ? {
+                ...m,
+                content: content !== undefined ? content : m.content,
+                pillar: pillar !== undefined ? pillar : m.pillar,
+              }
+            : m
+        ),
+      };
+    }
+
     case "SET_STATE":
       return action.payload;
 
@@ -157,6 +183,7 @@ interface StoreContextValue {
   completeOnboarding: (data: Partial<UserProfile>) => void;
   toggleAction: (id: string) => void;
   addChatMessage: (msg: ChatMessage) => void;
+  updateChatMessage: (id: string, updates: { content?: string; pillar?: PillarId }) => void;
 }
 
 const StoreContext = createContext<StoreContextValue | null>(null);
@@ -173,13 +200,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored) as AppState;
-        // Regenerate today's actions if it's a new day
+        // Regenerate today's actions if it's a new day, using user prefs
         const today = getTodayStr();
         const todayProg = parsed.weeklyProgress.find((d) => d.date === today);
         if (todayProg) {
           parsed.todayActions = todayProg.actions;
         } else {
-          parsed.todayActions = generateTodayActions();
+          parsed.todayActions = generateTodayActions(parsed.user);
         }
         dispatch({ type: "SET_STATE", payload: parsed });
       }
@@ -207,6 +234,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     completeOnboarding: (data) => dispatch({ type: "COMPLETE_ONBOARDING", payload: data }),
     toggleAction: (id) => dispatch({ type: "TOGGLE_ACTION", payload: id }),
     addChatMessage: (msg) => dispatch({ type: "ADD_CHAT_MESSAGE", payload: msg }),
+    updateChatMessage: (id, updates) =>
+      dispatch({ type: "UPDATE_CHAT_MESSAGE", payload: { id, ...updates } }),
   };
 
   if (!hydrated) {
