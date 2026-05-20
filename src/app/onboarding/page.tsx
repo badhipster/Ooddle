@@ -10,10 +10,14 @@ import {
   FITNESS_LEVELS,
   DIETARY_PREFERENCES,
   SLEEP_PATTERNS,
+  COMMON_MEALS,
+  MEAL_PATTERNS,
+  WORK_SCHEDULES,
+  PROTEIN_PREFERENCES,
   PILLAR_LIST,
 } from "@/lib/constants";
 
-const STEPS = ["Welcome", "Goals", "Fitness", "Diet", "Sleep", "Ready"];
+const STEPS = ["Welcome", "Goals", "Fitness", "Diet", "Routine", "Sleep", "Ready"];
 
 const slideVariants = {
   enter: (dir: number) => ({ x: dir > 0 ? 300 : -300, opacity: 0 }),
@@ -31,6 +35,20 @@ export default function OnboardingPage() {
   const [fitnessLevel, setFitnessLevel] = useState("");
   const [diet, setDiet] = useState("");
   const [sleep, setSleep] = useState("");
+
+  // Routine step state — all optional. India-first context.
+  const [commonMeals, setCommonMeals] = useState<string[]>([]);
+  const [mealPattern, setMealPattern] = useState<string[]>([]);
+  const [workSchedule, setWorkSchedule] = useState("");
+  const [proteinPreference, setProteinPreference] = useState<string[]>([]);
+
+  const toggleInList = (
+    list: string[],
+    setter: (v: string[]) => void,
+    id: string
+  ) => {
+    setter(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
+  };
 
   const next = () => {
     setDirection(1);
@@ -51,6 +69,11 @@ export default function OnboardingPage() {
       fitnessLevel,
       dietaryPreference: diet,
       sleepPattern: sleep,
+      locale: "IN",
+      commonMeals,
+      mealPattern,
+      workSchedule: workSchedule || undefined,
+      proteinPreference,
     });
     router.push("/dashboard");
   };
@@ -60,7 +83,8 @@ export default function OnboardingPage() {
     if (step === 1) return goals.length > 0;
     if (step === 2) return fitnessLevel !== "";
     if (step === 3) return diet !== "";
-    if (step === 4) return sleep !== "";
+    if (step === 4) return true; // Routine — all optional
+    if (step === 5) return sleep !== "";
     return true;
   };
 
@@ -299,6 +323,162 @@ export default function OnboardingPage() {
             {step === 4 && (
               <div>
                 <h2 style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 800, marginBottom: 8 }}>
+                  Your daily routine
+                </h2>
+                <p style={{ fontSize: 14, color: "var(--text-secondary)", marginBottom: 20 }}>
+                  Tell Ooddle a bit about your day. All optional. The more we know, the more your plan fits real life.
+                </p>
+
+                {/* Common meals */}
+                <div style={{ marginBottom: 20 }}>
+                  <h3 style={{ fontSize: 13, fontWeight: 700, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>
+                    Meals you often eat
+                  </h3>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {COMMON_MEALS.map((m) => {
+                      const selected = commonMeals.includes(m.id);
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => toggleInList(commonMeals, setCommonMeals, m.id)}
+                          style={{
+                            padding: "8px 14px",
+                            borderRadius: "var(--radius-full)",
+                            border: `1.5px solid ${selected ? "var(--ooddle-primary)" : "var(--border-light)"}`,
+                            background: selected ? "var(--pillar-movement-bg)" : "var(--surface-1)",
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: "var(--text-primary)",
+                            transition: "all 0.15s",
+                          }}
+                        >
+                          <span style={{ fontSize: 14 }}>{m.emoji}</span>
+                          {m.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Meal pattern */}
+                <div style={{ marginBottom: 20 }}>
+                  <h3 style={{ fontSize: 13, fontWeight: 700, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>
+                    Your meal rhythm
+                  </h3>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {MEAL_PATTERNS.map((p) => {
+                      const selected = mealPattern.includes(p.id);
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => toggleInList(mealPattern, setMealPattern, p.id)}
+                          style={{
+                            padding: "8px 14px",
+                            borderRadius: "var(--radius-full)",
+                            border: `1.5px solid ${selected ? "var(--ooddle-primary)" : "var(--border-light)"}`,
+                            background: selected ? "var(--pillar-movement-bg)" : "var(--surface-1)",
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: "var(--text-primary)",
+                            transition: "all 0.15s",
+                          }}
+                        >
+                          <span style={{ fontSize: 14 }}>{p.emoji}</span>
+                          {p.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Work schedule */}
+                <div style={{ marginBottom: 20 }}>
+                  <h3 style={{ fontSize: 13, fontWeight: 700, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>
+                    Your typical day
+                  </h3>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {WORK_SCHEDULES.map((w) => {
+                      const selected = workSchedule === w.id;
+                      return (
+                        <button
+                          key={w.id}
+                          type="button"
+                          onClick={() => setWorkSchedule(selected ? "" : w.id)}
+                          style={{
+                            padding: "8px 14px",
+                            borderRadius: "var(--radius-full)",
+                            border: `1.5px solid ${selected ? "var(--ooddle-primary)" : "var(--border-light)"}`,
+                            background: selected ? "var(--pillar-movement-bg)" : "var(--surface-1)",
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: "var(--text-primary)",
+                            transition: "all 0.15s",
+                          }}
+                          title={w.description}
+                        >
+                          <span style={{ fontSize: 14 }}>{w.emoji}</span>
+                          {w.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Protein preference */}
+                <div>
+                  <h3 style={{ fontSize: 13, fontWeight: 700, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>
+                    Protein you eat
+                  </h3>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {PROTEIN_PREFERENCES.map((p) => {
+                      const selected = proteinPreference.includes(p.id);
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => toggleInList(proteinPreference, setProteinPreference, p.id)}
+                          style={{
+                            padding: "8px 14px",
+                            borderRadius: "var(--radius-full)",
+                            border: `1.5px solid ${selected ? "var(--ooddle-primary)" : "var(--border-light)"}`,
+                            background: selected ? "var(--pillar-movement-bg)" : "var(--surface-1)",
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: "var(--text-primary)",
+                            transition: "all 0.15s",
+                          }}
+                        >
+                          <span style={{ fontSize: 14 }}>{p.emoji}</span>
+                          {p.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {step === 5 && (
+              <div>
+                <h2 style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 800, marginBottom: 8 }}>
                   Sleep pattern
                 </h2>
                 <p style={{ fontSize: 14, color: "var(--text-secondary)", marginBottom: 24 }}>
@@ -335,7 +515,7 @@ export default function OnboardingPage() {
               </div>
             )}
 
-            {step === 5 && (
+            {step === 6 && (
               <div style={{ textAlign: "center" }}>
                 <motion.div
                   initial={{ scale: 0 }}

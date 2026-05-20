@@ -115,6 +115,18 @@ interface MicroActionTemplate
   baseConfidence: ConfidenceLevel;
   /** Optional safety note. Required for supplements + fasting style actions. */
   safetyNote?: string;
+
+  // India-first routine tags. All optional; templates without these stay
+  // selectable for every user, India or not.
+  /** Common Indian meal staples the action references. e.g. ["roti","dal"]. */
+  mealTags?: string[];
+  /** Meal pattern tags. e.g. ["late_dinner","frequent_snacking"]. */
+  mealPatternTags?: string[];
+  /** Work schedule tags. e.g. ["desk_job","shift_work"]. */
+  workScheduleTags?: string[];
+  /** Compatible protein preferences. If set, action is filtered out for
+   *  users whose proteinPreference does not overlap. e.g. ["veg","dairy"]. */
+  proteinPreferenceTags?: string[];
 }
 
 export const MICRO_ACTION_LIBRARY: MicroActionTemplate[] = [
@@ -367,6 +379,161 @@ export const MICRO_ACTION_LIBRARY: MicroActionTemplate[] = [
     safetyNote:
       "Check with a clinician if pregnant, managing a condition, or taking medications.",
   },
+
+  /* ── India-relevant additions (metabolic, movement, recovery) ── */
+
+  // METABOLIC
+  {
+    pillarId: "metabolic",
+    title: "Add a Curd or Dahi Side",
+    description:
+      "Add a small bowl of curd or dahi to one meal today for an easy protein boost and gut support.",
+    duration: "1 min",
+    difficulty: "easy",
+    goalTags: ["weight", "gut", "energy"],
+    evidenceKeys: ["icmr_protein_rda_in", "protein_first_breakfast"],
+    signalHints: ["common meals", "protein servings"],
+    baseConfidence: "medium",
+    mealTags: ["roti", "rice", "dal", "sabzi"],
+    proteinPreferenceTags: ["veg", "dairy", "egg", "chicken_fish"],
+  },
+  {
+    pillarId: "metabolic",
+    title: "Swap One Roti for a Dal Bowl",
+    description:
+      "Replace one roti with a generous serving of dal today to push protein and fiber up without changing the meal.",
+    duration: "2 min",
+    difficulty: "easy",
+    goalTags: ["weight", "gut", "energy"],
+    evidenceKeys: ["icmr_protein_rda_in", "protein_first_breakfast"],
+    signalHints: ["common meals", "protein servings"],
+    baseConfidence: "medium",
+    mealTags: ["roti", "dal"],
+    proteinPreferenceTags: ["veg", "vegan", "dairy", "egg", "chicken_fish"],
+  },
+  {
+    pillarId: "metabolic",
+    title: "Sabzi-First Plate",
+    description:
+      "Fill half your plate with sabzi or salad first, then add roti or rice. Slows the meal and helps satiety.",
+    duration: "1 min",
+    difficulty: "easy",
+    goalTags: ["weight", "gut"],
+    evidenceKeys: ["postmeal_walk_glucose"],
+    signalHints: ["common meals"],
+    baseConfidence: "low",
+    mealTags: ["sabzi", "roti", "rice"],
+  },
+  {
+    pillarId: "metabolic",
+    title: "Water Before Every Chai",
+    description:
+      "Drink a glass of water before each tea or coffee today. Easy hydration anchor that fits an Indian routine.",
+    duration: "1 min",
+    difficulty: "easy",
+    goalTags: ["energy"],
+    evidenceKeys: ["hydration_morning"],
+    signalHints: ["common meals"],
+    baseConfidence: "low",
+    mealTags: ["tea_coffee"],
+  },
+  {
+    pillarId: "metabolic",
+    title: "Pre-Lunch Protein Hit",
+    description:
+      "Have 15 to 20 g of protein (eggs, paneer, sprouts, or whey) about an hour before lunch to steady appetite.",
+    duration: "5 min",
+    difficulty: "easy",
+    goalTags: ["weight", "energy", "fitness"],
+    evidenceKeys: ["protein_first_breakfast", "icmr_protein_rda_in"],
+    signalHints: ["protein servings", "meal pattern"],
+    baseConfidence: "medium",
+    mealPatternTags: ["frequent_snacking", "irregular_meals"],
+  },
+
+  // MOVEMENT
+  {
+    pillarId: "movement",
+    title: "10-Minute Post-Dinner Walk",
+    description:
+      "Walk for 10 minutes after dinner. Especially helpful when dinner runs later than 9 pm.",
+    duration: "10 min",
+    difficulty: "easy",
+    goalTags: ["weight", "sleep", "energy"],
+    evidenceKeys: ["postmeal_walk_glucose"],
+    signalHints: ["meal pattern", "bedtime"],
+    baseConfidence: "high",
+    mealPatternTags: ["late_dinner", "irregular_meals"],
+  },
+  {
+    pillarId: "movement",
+    title: "Desk Stretch Every Hour",
+    description:
+      "Stand up, roll shoulders, and stretch hips for 60 seconds every hour you are at the desk.",
+    duration: "1 min/hr",
+    difficulty: "easy",
+    goalTags: ["energy", "fitness"],
+    evidenceKeys: ["desk_break_mobility"],
+    signalHints: ["work schedule"],
+    baseConfidence: "high",
+    workScheduleTags: ["desk_job", "hybrid", "student"],
+  },
+  {
+    pillarId: "movement",
+    title: "Stairs Over Lift",
+    description:
+      "Take the stairs at least twice today. Adds easy NEAT without any extra time.",
+    duration: "2 min",
+    difficulty: "easy",
+    goalTags: ["fitness", "weight", "energy"],
+    evidenceKeys: ["daily_step_target"],
+    signalHints: ["work schedule"],
+    baseConfidence: "medium",
+    workScheduleTags: ["desk_job", "hybrid"],
+  },
+
+  // RECOVERY
+  {
+    pillarId: "recovery",
+    title: "Lighter Dinner, Earlier",
+    description:
+      "Aim for a smaller dinner finished 2 to 3 hours before bed today. Supports deeper overnight recovery.",
+    duration: "—",
+    difficulty: "medium",
+    goalTags: ["sleep", "weight", "energy"],
+    evidenceKeys: ["meal_timing_late_dinner"],
+    signalHints: ["meal pattern", "bedtime"],
+    baseConfidence: "medium",
+    mealPatternTags: ["late_dinner", "irregular_meals"],
+    safetyNote:
+      "Skip if you are pregnant, have a history of disordered eating, or your clinician has asked you to eat at specific times.",
+  },
+  {
+    pillarId: "recovery",
+    title: "Chai Cutoff at 4 PM",
+    description:
+      "Skip caffeine, including chai and coffee, after 4 pm tonight. Protects evening sleep onset.",
+    duration: "—",
+    difficulty: "easy",
+    goalTags: ["sleep", "energy"],
+    evidenceKeys: ["no_screens_before_bed"],
+    signalHints: ["common meals", "bedtime"],
+    baseConfidence: "medium",
+    mealTags: ["tea_coffee"],
+  },
+  {
+    pillarId: "recovery",
+    title: "Pre-Bed Wind-Down (No Phone)",
+    description:
+      "Phone away 30 minutes before bed. Pick reading, stretching, or a quiet routine instead.",
+    duration: "30 min",
+    difficulty: "medium",
+    goalTags: ["sleep", "stress", "focus"],
+    evidenceKeys: ["no_screens_before_bed", "phone_free_morning"],
+    signalHints: ["work schedule", "bedtime"],
+    baseConfidence: "medium",
+    workScheduleTags: ["shift_work", "desk_job", "hybrid"],
+  },
 ];
 
 /* ──────────────────────────────────────────────────────────
@@ -380,6 +547,15 @@ export type EnrichedTemplate = Omit<MicroAction, "id" | "completed">;
 interface PersonalizationContext {
   goals?: string[];
   fitnessLevel?: string;
+  commonMeals?: string[];
+  mealPattern?: string[];
+  workSchedule?: string;
+  proteinPreference?: string[];
+}
+
+function overlap(a?: string[], b?: string[]): string[] {
+  if (!a?.length || !b?.length) return [];
+  return a.filter((x) => b.includes(x));
 }
 
 function buildExplanation(
@@ -402,11 +578,26 @@ function buildExplanation(
 
   const matchedGoals =
     ctx.goals?.filter((g) => template.goalTags.includes(g)) ?? [];
+  const matchedMeals = overlap(ctx.commonMeals, template.mealTags);
+  const matchedPattern = overlap(ctx.mealPattern, template.mealPatternTags);
+  const matchedWork =
+    ctx.workSchedule && template.workScheduleTags?.includes(ctx.workSchedule)
+      ? ctx.workSchedule
+      : null;
 
   let rationale: string;
   if (isStarter) {
     rationale =
       "Starter recommendation based on your selected goals. As Ooddle learns more about your routine, this will get more specific.";
+  } else if (matchedPattern.length > 0) {
+    const patternText = matchedPattern[0].replace(/_/g, " ");
+    rationale = `Picked because you mentioned ${patternText}. Small, low-friction adjustment that fits your meal pattern.`;
+  } else if (matchedMeals.length > 0) {
+    const mealText = matchedMeals.slice(0, 2).join(" and ").replace(/_/g, " ");
+    rationale = `Tailored to your ${mealText} routine. Easy add-on without changing what you already eat.`;
+  } else if (matchedWork) {
+    const workText = matchedWork.replace(/_/g, " ");
+    rationale = `Designed for a ${workText} day. Fits between calls and meetings.`;
   } else if (matchedGoals.length > 0) {
     const goalText = matchedGoals.slice(0, 2).join(" and ");
     rationale = `Picked for your ${goalText} goal. Pairs well with your current routine.`;
@@ -459,12 +650,24 @@ export const DEFAULT_MICRO_ACTIONS: EnrichedTemplate[] = (() => {
  * onboarding answers, each carrying an explanation block. Falls back to
  * defaults when no preferences are set.
  *
- * Scoring: +2 per matching goal tag, +3 for fitness-level match (-5 mismatch),
- * +1 baseline for easy actions when no preferences exist.
+ * Scoring:
+ *   +2 per matching goal tag
+ *   +3 for fitness-level match, -5 for fitness-level mismatch
+ *   +2 per matching meal staple (e.g. user picked "roti", template tags include "roti")
+ *   +3 for matching meal pattern (e.g. "late_dinner")
+ *   +2 for matching work schedule
+ *   -10 for protein preference incompatibility (e.g. chicken/fish template, vegan user)
+ *   +1 baseline for easy actions when no preferences exist
  */
 export function selectPersonalizedActions(
   goals: string[] = [],
-  fitnessLevel: string = ""
+  fitnessLevel: string = "",
+  routine: {
+    commonMeals?: string[];
+    mealPattern?: string[];
+    workSchedule?: string;
+    proteinPreference?: string[];
+  } = {}
 ): EnrichedTemplate[] {
   const result: EnrichedTemplate[] = [];
   const pillarIds: PillarId[] = [
@@ -474,8 +677,28 @@ export function selectPersonalizedActions(
     "recovery",
     "supplements",
   ];
-  const ctx: PersonalizationContext = { goals, fitnessLevel };
-  const hasPrefs = goals.length > 0 || Boolean(fitnessLevel);
+  const {
+    commonMeals = [],
+    mealPattern = [],
+    workSchedule = "",
+    proteinPreference = [],
+  } = routine;
+
+  const ctx: PersonalizationContext = {
+    goals,
+    fitnessLevel,
+    commonMeals,
+    mealPattern,
+    workSchedule,
+    proteinPreference,
+  };
+  const hasPrefs =
+    goals.length > 0 ||
+    Boolean(fitnessLevel) ||
+    commonMeals.length > 0 ||
+    mealPattern.length > 0 ||
+    Boolean(workSchedule) ||
+    proteinPreference.length > 0;
 
   for (const pillar of pillarIds) {
     const candidates = MICRO_ACTION_LIBRARY.filter((a) => a.pillarId === pillar);
@@ -491,13 +714,29 @@ export function selectPersonalizedActions(
           score -= 5;
         }
       }
+      if (a.mealTags?.length && commonMeals.length) {
+        score += a.mealTags.filter((t) => commonMeals.includes(t)).length * 2;
+      }
+      if (a.mealPatternTags?.length && mealPattern.length) {
+        score += a.mealPatternTags.filter((t) => mealPattern.includes(t)).length * 3;
+      }
+      if (a.workScheduleTags?.length && workSchedule) {
+        if (a.workScheduleTags.includes(workSchedule)) score += 2;
+      }
+      // Protein incompatibility — reject vegan from chicken/fish-only actions.
+      if (a.proteinPreferenceTags?.length && proteinPreference.length) {
+        const compatible = a.proteinPreferenceTags.some((t) =>
+          proteinPreference.includes(t)
+        );
+        if (!compatible) score -= 10;
+      }
       if (goals.length === 0 && a.difficulty === "easy") score += 1;
       return { action: a, score };
     });
 
     scored.sort((x, y) => y.score - x.score);
     const picked = scored[0];
-    if (picked) {
+    if (picked && picked.score > -10) {
       result.push(templateToEnriched(picked.action, ctx, !hasPrefs));
     }
   }
@@ -536,4 +775,49 @@ export const SLEEP_PATTERNS = [
   { id: "moderate", label: "Moderate", description: "Bed by 11-12pm, up at 7-8am", emoji: "☀️" },
   { id: "night", label: "Night Owl", description: "Bed after midnight, up late", emoji: "🦉" },
   { id: "irregular", label: "Irregular", description: "No consistent sleep schedule", emoji: "🔄" },
+];
+
+/* ──────────────────────────────────────────────────────────
+   India-first routine constants. Ids stay in snake_case so
+   they round-trip through localStorage and the SQL schema.
+   Labels are display-only.
+   ────────────────────────────────────────────────────────── */
+
+export const COMMON_MEALS = [
+  { id: "roti", label: "Roti / chapati", emoji: "🫓" },
+  { id: "rice", label: "Rice", emoji: "🍚" },
+  { id: "dal", label: "Dal", emoji: "🥣" },
+  { id: "sabzi", label: "Sabzi", emoji: "🥗" },
+  { id: "dosa_idli", label: "Dosa / idli", emoji: "🥞" },
+  { id: "poha_upma", label: "Poha / upma", emoji: "🍲" },
+  { id: "eggs", label: "Eggs", emoji: "🥚" },
+  { id: "paneer_tofu", label: "Paneer / tofu", emoji: "🧀" },
+  { id: "chicken_fish", label: "Chicken / fish", emoji: "🍗" },
+  { id: "curd", label: "Curd / dahi", emoji: "🥛" },
+  { id: "tea_coffee", label: "Tea / coffee", emoji: "☕" },
+  { id: "snacks", label: "Snacks", emoji: "🍪" },
+];
+
+export const MEAL_PATTERNS = [
+  { id: "early_dinner", label: "Early dinner (before 8 pm)", emoji: "🍽️" },
+  { id: "late_dinner", label: "Late dinner (after 9 pm)", emoji: "🌙" },
+  { id: "irregular_meals", label: "Irregular meal times", emoji: "🔄" },
+  { id: "frequent_snacking", label: "Frequent snacking", emoji: "🍿" },
+  { id: "fasting_window", label: "I keep a fasting window", emoji: "⏳" },
+];
+
+export const WORK_SCHEDULES = [
+  { id: "desk_job", label: "Desk job", description: "Mostly seated, computer work", emoji: "💻" },
+  { id: "hybrid", label: "Hybrid", description: "Mix of office and home days", emoji: "🏠" },
+  { id: "shift_work", label: "Shift work", description: "Rotating or night shifts", emoji: "🌗" },
+  { id: "student", label: "Student", description: "Classes, study blocks", emoji: "📚" },
+  { id: "field_work", label: "Field work", description: "On the move, on your feet", emoji: "🚶" },
+];
+
+export const PROTEIN_PREFERENCES = [
+  { id: "veg", label: "Vegetarian protein", emoji: "🥗" },
+  { id: "vegan", label: "Vegan protein", emoji: "🌱" },
+  { id: "dairy", label: "Dairy", emoji: "🥛" },
+  { id: "egg", label: "Egg", emoji: "🥚" },
+  { id: "chicken_fish", label: "Chicken / fish", emoji: "🍗" },
 ];

@@ -134,10 +134,23 @@ function enrichedToMicroAction(t: EnrichedTemplate): MicroAction {
 }
 
 function generateTodayActions(user?: UserProfile | null): MicroAction[] {
-  const personalized: EnrichedTemplate[] =
-    user && (user.goals.length > 0 || user.fitnessLevel)
-      ? selectPersonalizedActions(user.goals, user.fitnessLevel)
-      : DEFAULT_MICRO_ACTIONS;
+  const hasAnyPref =
+    !!user &&
+    (user.goals.length > 0 ||
+      !!user.fitnessLevel ||
+      (user.commonMeals?.length ?? 0) > 0 ||
+      (user.mealPattern?.length ?? 0) > 0 ||
+      !!user.workSchedule ||
+      (user.proteinPreference?.length ?? 0) > 0);
+
+  const personalized: EnrichedTemplate[] = hasAnyPref
+    ? selectPersonalizedActions(user!.goals, user!.fitnessLevel, {
+        commonMeals: user!.commonMeals,
+        mealPattern: user!.mealPattern,
+        workSchedule: user!.workSchedule,
+        proteinPreference: user!.proteinPreference,
+      })
+    : DEFAULT_MICRO_ACTIONS;
 
   return personalized.map(enrichedToMicroAction);
 }
