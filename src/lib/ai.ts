@@ -30,11 +30,45 @@ interface UserProfile {
   fitnessLevel?: string;
   dietaryPreference?: string;
   sleepPattern?: string;
+  locale?: string;
+  primaryCuisine?: string[];
+  commonMeals?: string[];
+  mealPattern?: string[];
+  workSchedule?: string;
+  proteinPreference?: string[];
+  constraints?: string[];
 }
 
 interface ChatHistoryItem {
   role: "user" | "assistant";
   content: string;
+}
+
+export interface DailyPlanAction {
+  pillarId: string;
+  title: string;
+  completed: boolean;
+  rationale: string;
+  confidence: "low" | "medium" | "high";
+}
+
+export interface DailyPlanContext {
+  date: string;
+  actions: DailyPlanAction[];
+}
+
+export interface RecentSignal {
+  type: string;
+  value: string | number;
+  unit?: string;
+  sourceType: "manual" | "apple_health" | "health_connect" | "wearable" | "estimate";
+  freshness: "fresh" | "aging" | "stale" | "missing";
+  observedAt: string;
+}
+
+export interface ChatExtras {
+  dailyPlanContext?: DailyPlanContext | null;
+  recentSignals?: RecentSignal[];
 }
 
 /**
@@ -44,14 +78,21 @@ interface ChatHistoryItem {
 export async function* streamAIResponse(
   message: string,
   history: ChatHistoryItem[] = [],
-  userProfile: UserProfile | null = null
+  userProfile: UserProfile | null = null,
+  extras: ChatExtras = {}
 ): AsyncGenerator<AIStreamChunk> {
   let response: Response;
   try {
     response = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, history, userProfile }),
+      body: JSON.stringify({
+        message,
+        history,
+        userProfile,
+        dailyPlanContext: extras.dailyPlanContext ?? null,
+        recentSignals: extras.recentSignals ?? [],
+      }),
     });
   } catch (err) {
     yield {
@@ -120,12 +161,13 @@ export async function* streamAIResponse(
 export async function getAIResponse(
   message: string,
   history: ChatHistoryItem[] = [],
-  userProfile: UserProfile | null = null
+  userProfile: UserProfile | null = null,
+  extras: ChatExtras = {}
 ): Promise<{ content: string; pillar?: string | null }> {
   let content = "";
   let pillar: string | null = null;
 
-  for await (const chunk of streamAIResponse(message, history, userProfile)) {
+  for await (const chunk of streamAIResponse(message, history, userProfile, extras)) {
     if (chunk.type === "meta") pillar = chunk.pillar ?? null;
     if (chunk.type === "text" && chunk.text) content += chunk.text;
     if (chunk.type === "error") {

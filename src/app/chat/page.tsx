@@ -4,8 +4,15 @@ import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Sparkles, Bot } from "lucide-react";
 import { useStore, ChatMessage } from "@/lib/store";
-import { streamAIResponse, getQuickReplies } from "@/lib/ai";
+import {
+  streamAIResponse,
+  getQuickReplies,
+  type ChatExtras,
+  type DailyPlanContext,
+  type RecentSignal,
+} from "@/lib/ai";
 import { PILLARS, PillarId } from "@/lib/constants";
+import { computeFreshness } from "@/lib/evidence";
 
 export default function ChatPage() {
   const { state, addChatMessage, updateChatMessage } = useStore();
@@ -65,10 +72,42 @@ export default function ChatPage() {
       .slice(-10)
       .map((m) => ({ role: m.role, content: m.content }));
 
+    // Build compact daily plan context — capped to 5 actions, rationales kept short.
+    const today = new Date().toISOString().split("T")[0];
+    const dailyPlanContext: DailyPlanContext | null =
+      state.todayActions.length > 0
+        ? {
+            date: today,
+            actions: state.todayActions.slice(0, 5).map((a) => ({
+              pillarId: a.pillarId,
+              title: a.title,
+              completed: a.completed,
+              rationale: a.explanation.rationale,
+              confidence: a.explanation.confidence,
+            })),
+          }
+        : null;
+
+    // Build recent signals — drop stale/missing client-side; server still gets
+    // notified of stale types so it can say "this may be outdated" if needed.
+    const recentSignals: RecentSignal[] = (state.healthSignals || [])
+      .map((s) => ({
+        type: s.type,
+        value: s.value,
+        unit: s.unit,
+        sourceType: s.sourceType,
+        observedAt: s.observedAt,
+        freshness: computeFreshness(s.observedAt),
+      }))
+      .filter((s) => s.freshness !== "missing")
+      .slice(-12);
+
+    const extras: ChatExtras = { dailyPlanContext, recentSignals };
+
     let accumulated = "";
     let lastPillar: string | null = null;
     try {
-      for await (const chunk of streamAIResponse(trimmed, history, state.user)) {
+      for await (const chunk of streamAIResponse(trimmed, history, state.user, extras)) {
         if (chunk.type === "meta") {
           lastPillar = chunk.pillar ?? null;
           if (lastPillar) {

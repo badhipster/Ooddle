@@ -31,6 +31,14 @@ interface UserProfile {
   fitnessLevel?: string;
   dietaryPreference?: string;
   sleepPattern?: string;
+  // India-first onboarding fields (optional; surfaced for routine-aware advice).
+  locale?: string;
+  primaryCuisine?: string[];
+  commonMeals?: string[];
+  mealPattern?: string[];
+  workSchedule?: string;
+  proteinPreference?: string[];
+  constraints?: string[];
 }
 
 interface ChatHistoryItem {
@@ -38,10 +46,38 @@ interface ChatHistoryItem {
   content: string;
 }
 
+type PlanConfidence = "low" | "medium" | "high";
+type PlanFreshness = "fresh" | "aging" | "stale" | "missing";
+type PlanSourceType = "manual" | "apple_health" | "health_connect" | "wearable" | "estimate";
+
+interface DailyPlanAction {
+  pillarId: string;
+  title: string;
+  completed: boolean;
+  rationale: string;
+  confidence: PlanConfidence;
+}
+
+interface DailyPlanContext {
+  date: string;
+  actions: DailyPlanAction[];
+}
+
+interface RecentSignal {
+  type: string;
+  value: string | number;
+  unit?: string;
+  sourceType: PlanSourceType;
+  freshness: PlanFreshness;
+  observedAt: string;
+}
+
 interface ChatRequest {
   message: string;
   history?: ChatHistoryItem[];
   userProfile?: UserProfile | null;
+  dailyPlanContext?: DailyPlanContext | null;
+  recentSignals?: RecentSignal[];
 }
 
 /* ── Pillar Sub-Agent System Prompts ── */
@@ -54,7 +90,12 @@ const PILLAR_PROMPTS: Record<string, string> = {
 };
 
 /* ── Build the Master System Prompt ── */
-function buildSystemPrompt(userProfile: UserProfile | null | undefined, pillarFocus: string): string {
+function buildSystemPrompt(
+  userProfile: UserProfile | null | undefined,
+  pillarFocus: string,
+  plan?: DailyPlanContext | null,
+  signals?: RecentSignal[]
+): string {
   const pillarPrompt = PILLAR_PROMPTS[pillarFocus] || "";
   const name = userProfile?.name?.split(" ")[0] || "friend";
 
@@ -71,6 +112,51 @@ function buildSystemPrompt(userProfile: UserProfile | null | undefined, pillarFo
   if (userProfile?.sleepPattern) {
     userContext += `\nSleep pattern: ${userProfile.sleepPattern}`;
   }
+  if (userProfile?.locale) {
+    userContext += `\nLocale: ${userProfile.locale}`;
+  }
+  if (userProfile?.commonMeals?.length) {
+    userContext += `\nCommon meals: ${userProfile.commonMeals.join(", ")}`;
+  }
+  if (userProfile?.mealPattern?.length) {
+    userContext += `\nMeal pattern: ${userProfile.mealPattern.join(", ")}`;
+  }
+  if (userProfile?.workSchedule) {
+    userContext += `\nWork schedule: ${userProfile.workSchedule}`;
+  }
+  if (userProfile?.proteinPreference?.length) {
+    userContext += `\nProtein preference: ${userProfile.proteinPreference.join(", ")}`;
+  }
+
+  /* Today's plan — keep it short. Cap at 5 actions and trim rationales. */
+  let planContext = "";
+  if (plan && plan.actions && plan.actions.length > 0) {
+    const compact = plan.actions.slice(0, 5).map((a) => {
+      const done = a.completed ? "done" : "pending";
+      const rationale = a.rationale.length > 90 ? a.rationale.slice(0, 87) + "..." : a.rationale;
+      return `- [${done}] (${a.pillarId}, ${a.confidence}) ${a.title} -- ${rationale}`;
+    });
+    planContext = `\n\n[TODAY'S PLAN — ${plan.date}]\n${compact.join("\n")}`;
+  }
+
+  /* Recent signals — only fresh or aging are usable. Stale is mentioned only if present. */
+  let signalsContext = "";
+  if (signals && signals.length > 0) {
+    const usable = signals.filter((s) => s.freshness === "fresh" || s.freshness === "aging");
+    const stale = signals.filter((s) => s.freshness === "stale");
+    const lines: string[] = [];
+    for (const s of usable.slice(0, 8)) {
+      const unit = s.unit ? ` ${s.unit}` : "";
+      lines.push(`- ${s.type}: ${s.value}${unit} (${s.sourceType}, ${s.freshness})`);
+    }
+    if (lines.length > 0) {
+      signalsContext = `\n\n[RECENT SIGNALS]\n${lines.join("\n")}`;
+    }
+    if (stale.length > 0) {
+      const staleTypes = stale.slice(0, 5).map((s) => s.type).join(", ");
+      signalsContext += `\n[STALE — do not rely on, note as outdated if referenced]: ${staleTypes}`;
+    }
+  }
 
   return `You are Ooddle, a warm, knowledgeable AI wellness companion. You guide users daily across 5 health pillars: metabolic health, movement, cognition & emotional health, recovery, and supplements/longevity.
 
@@ -79,6 +165,10 @@ CORE BEHAVIORS:
 - Give specific, actionable advice. No vague platitudes like "stay positive."
 - Use evidence-based recommendations. Cite researchers when relevant.
 - Reference the user's profile to personalize advice (e.g., for a "beginner" suggest gentler exercises).
+- When the user asks about their plan or progress, reference today's plan by title, pillar, and completion state. Do not invent actions that are not listed.
+- Use recent signals only when their freshness is "fresh" or "aging". If you must mention a stale signal, explicitly say the data may be outdated.
+- Never infer a diagnosis from a signal. Never recommend starting, stopping, or changing medications.
+- For supplement guidance, add a brief safety note: check with a clinician if pregnant, managing a condition, or taking medications.
 - IMPORTANT: You are NOT a medical professional. For medical concerns, recommend consulting a doctor.
 - Keep responses concise — 2 short paragraphs max unless the user asks for detail.
 - Use emojis sparingly and meaningfully (1-2 per response, not in every line).
@@ -86,7 +176,7 @@ CORE BEHAVIORS:
 
 PILLAR FOCUS FOR THIS RESPONSE:
 ${pillarPrompt}
-${userContext}`;
+${userContext}${planContext}${signalsContext}`;
 }
 
 /* ── Stream a completion from Groq (free tier) ── */
@@ -142,7 +232,13 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const { message, history = [], userProfile = null } = body;
+  const {
+    message,
+    history = [],
+    userProfile = null,
+    dailyPlanContext = null,
+    recentSignals = [],
+  } = body;
 
   if (!message || typeof message !== "string" || message.trim().length === 0) {
     return new Response(JSON.stringify({ error: "Message required" }), {
@@ -153,7 +249,7 @@ export async function POST(req: NextRequest) {
 
   // Route to the appropriate pillar sub-agent
   const intent = detectIntent(message);
-  const systemPrompt = buildSystemPrompt(userProfile, intent);
+  const systemPrompt = buildSystemPrompt(userProfile, intent, dailyPlanContext, recentSignals);
 
   // Stream the response
   const encoder = new TextEncoder();
