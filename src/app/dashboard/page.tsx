@@ -1,18 +1,10 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Check, Flame, Trophy, Calendar, TrendingUp } from "lucide-react";
+import { Flame, Trophy, Calendar, TrendingUp } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { PILLARS, PillarId } from "@/lib/constants";
-
-const fadeUp = {
-  hidden: { opacity: 0, y: 20 },
-  visible: (i: number) => ({
-    opacity: 1,
-    y: 0,
-    transition: { delay: i * 0.08, duration: 0.5, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] },
-  }),
-};
+import { MicroActionCard, fadeUp } from "./MicroActionCard";
 
 export default function DashboardPage() {
   const { state, toggleAction } = useStore();
@@ -237,115 +229,13 @@ export default function DashboardPage() {
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {state.todayActions.map((action, i) => {
           const pillar = PILLARS[action.pillarId as PillarId];
-          const Icon = pillar.icon;
           return (
-            <motion.div
-              key={action.id}
-              variants={fadeUp}
-              custom={i + 3}
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
-              onClick={() => toggleAction(action.id)}
-              style={{
-                background: "var(--surface-0)",
-                borderRadius: "var(--radius-lg)",
-                padding: "18px 20px",
-                border: `1px solid ${action.completed ? pillar.color : "var(--border-light)"}`,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 16,
-                transition: "border-color 0.3s, background 0.3s",
-                opacity: action.completed ? 0.85 : 1,
-              }}
-            >
-              {/* Pillar icon */}
-              <div
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: "var(--radius-md)",
-                  backgroundColor: pillar.bgColor,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                }}
-              >
-                <Icon size={20} style={{ color: pillar.color }} />
-              </div>
-
-              {/* Content */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    marginBottom: 4,
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: 15,
-                      fontWeight: 700,
-                      color: "var(--text-primary)",
-                      textDecoration: action.completed ? "line-through" : "none",
-                      fontFamily: "var(--font-display)",
-                    }}
-                  >
-                    {action.title}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 600,
-                      padding: "2px 8px",
-                      borderRadius: "var(--radius-full)",
-                      backgroundColor: pillar.bgColor,
-                      color: pillar.darkColor,
-                    }}
-                  >
-                    {pillar.name}
-                  </span>
-                </div>
-                <p
-                  style={{
-                    fontSize: 13,
-                    color: "var(--text-secondary)",
-                    lineHeight: 1.5,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {action.description}
-                </p>
-                <div style={{ display: "flex", gap: 12, marginTop: 6 }}>
-                  <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>⏱ {action.duration}</span>
-                  <span style={{ fontSize: 12, color: "var(--text-tertiary)", textTransform: "capitalize" }}>
-                    📊 {action.difficulty}
-                  </span>
-                </div>
-              </div>
-
-              {/* Check button */}
-              <div
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: "50%",
-                  border: `2px solid ${action.completed ? pillar.color : "var(--border-medium)"}`,
-                  background: action.completed ? pillar.color : "transparent",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                  transition: "all 0.3s",
-                }}
-              >
-                {action.completed && <Check size={16} color="white" strokeWidth={3} />}
-              </div>
+            <motion.div key={action.id} variants={fadeUp} custom={i + 3}>
+              <MicroActionCard
+                action={action}
+                pillar={pillar}
+                onToggle={() => toggleAction(action.id)}
+              />
             </motion.div>
           );
         })}
