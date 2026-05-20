@@ -1,4 +1,11 @@
 import { Flame, Brain, Dumbbell, Moon, Pill, LucideIcon } from "lucide-react";
+import {
+  ConfidenceLevel,
+  EvidenceReference,
+  MicroActionExplanation,
+  RecommendationSignal,
+  getEvidence,
+} from "./evidence";
 
 export type PillarId = "metabolic" | "movement" | "cognition" | "recovery" | "supplements";
 
@@ -82,16 +89,32 @@ export interface MicroAction {
   duration: string;
   difficulty: "easy" | "medium" | "hard";
   completed: boolean;
+  /**
+   * Why this action was recommended. Required at the type level so we never
+   * render an action without a rationale, but generators fall back to a
+   * "starter" explanation when no real signal exists.
+   */
+  explanation: MicroActionExplanation;
 }
 
 /* ──────────────────────────────────────────────────────────
-   Micro-Action Library — tagged with goals for personalization.
-   The dashboard pulls from here based on user's onboarding answers.
+   Micro-Action Library — tagged with goals + evidence metadata.
+   The dashboard pulls from here based on the user's onboarding answers
+   and the template's evidence keys generate the "Why this today" panel.
    ────────────────────────────────────────────────────────── */
 
-interface MicroActionTemplate extends Omit<MicroAction, "id" | "completed"> {
+interface MicroActionTemplate
+  extends Omit<MicroAction, "id" | "completed" | "explanation"> {
   goalTags: string[]; // matches ONBOARDING_GOALS ids
   fitnessLevels?: ("beginner" | "intermediate" | "advanced")[];
+  /** Stable evidence keys from EVIDENCE_CATALOG, 1 or 2 per action. */
+  evidenceKeys: string[];
+  /** Signal labels that the rationale references when matching signals exist. */
+  signalHints?: string[];
+  /** Default confidence when the action is selected from real preferences. */
+  baseConfidence: ConfidenceLevel;
+  /** Optional safety note. Required for supplements + fasting style actions. */
+  safetyNote?: string;
 }
 
 export const MICRO_ACTION_LIBRARY: MicroActionTemplate[] = [
@@ -99,171 +122,328 @@ export const MICRO_ACTION_LIBRARY: MicroActionTemplate[] = [
   {
     pillarId: "metabolic",
     title: "Drink Warm Lemon Water",
-    description: "Start your day with warm water + fresh lemon to kickstart digestion and hydration.",
+    description:
+      "Start your day with warm water plus fresh lemon to support hydration and a gentle morning routine.",
     duration: "2 min",
     difficulty: "easy",
     goalTags: ["energy", "weight", "gut"],
+    evidenceKeys: ["hydration_morning"],
+    signalHints: ["morning routine"],
+    baseConfidence: "low",
   },
   {
     pillarId: "metabolic",
     title: "10-Min Post-Meal Walk",
-    description: "Walk for 10 min after lunch to reduce blood sugar spikes by up to 30%.",
+    description:
+      "Walk for 10 minutes after a main meal to support steadier energy through the afternoon.",
     duration: "10 min",
     difficulty: "easy",
     goalTags: ["energy", "weight"],
+    evidenceKeys: ["postmeal_walk_glucose"],
+    signalHints: ["meal timing", "step count"],
+    baseConfidence: "high",
   },
   {
     pillarId: "metabolic",
     title: "Protein-First Breakfast",
-    description: "Eat 30g of protein within 1 hour of waking to stabilize blood sugar all day.",
+    description:
+      "Aim for a protein-forward first meal within 1 to 2 hours of waking to support steadier appetite.",
     duration: "5 min",
     difficulty: "easy",
     goalTags: ["energy", "weight", "fitness"],
+    evidenceKeys: ["protein_first_breakfast", "icmr_protein_rda_in"],
+    signalHints: ["protein servings", "meal timing"],
+    baseConfidence: "medium",
   },
   {
     pillarId: "metabolic",
-    title: "16-Hour Overnight Fast",
-    description: "Stop eating 3 hours before bed; break the fast at noon for metabolic flexibility.",
+    title: "Earlier, Lighter Dinner",
+    description:
+      "Try finishing dinner 2 to 3 hours before bed and keep portions lighter to support overnight recovery.",
     duration: "—",
     difficulty: "medium",
-    goalTags: ["weight", "longevity", "energy"],
+    goalTags: ["weight", "longevity", "energy", "sleep"],
+    evidenceKeys: ["meal_timing_late_dinner"],
+    signalHints: ["meal pattern", "bedtime"],
+    baseConfidence: "medium",
+    safetyNote:
+      "Skip if you are pregnant, have a history of disordered eating, or your clinician has asked you to eat at specific times.",
   },
 
   // ── MOVEMENT ──
   {
     pillarId: "movement",
     title: "5-Minute Morning Stretch",
-    description: "Gentle full-body stretching to wake up muscles and improve circulation.",
+    description:
+      "Gentle full-body stretching to wake up muscles and improve circulation.",
     duration: "5 min",
     difficulty: "easy",
     goalTags: ["energy", "fitness"],
     fitnessLevels: ["beginner", "intermediate", "advanced"],
+    evidenceKeys: ["desk_break_mobility"],
+    signalHints: ["work schedule"],
+    baseConfidence: "medium",
   },
   {
     pillarId: "movement",
     title: "8,000 Step Goal",
-    description: "Hit 8K steps today. Light cardio improves mood, glucose control, and cardiovascular health.",
+    description:
+      "Aim for around 8,000 steps today. Light cardio supports mood, glucose control, and cardiovascular wellness.",
     duration: "Throughout day",
     difficulty: "easy",
     goalTags: ["fitness", "energy", "weight"],
     fitnessLevels: ["beginner", "intermediate"],
+    evidenceKeys: ["daily_step_target"],
+    signalHints: ["step count"],
+    baseConfidence: "high",
   },
   {
     pillarId: "movement",
     title: "Zone-2 Cardio (30 min)",
-    description: "Steady cardio at 60-70% max HR builds aerobic base. You should be able to hold a conversation.",
+    description:
+      "Steady cardio at a conversational pace (around 60 to 70 percent max HR) builds aerobic base.",
     duration: "30 min",
     difficulty: "medium",
     goalTags: ["fitness", "longevity"],
     fitnessLevels: ["intermediate", "advanced"],
+    evidenceKeys: ["zone2_aerobic_base"],
+    signalHints: ["fitness level"],
+    baseConfidence: "high",
   },
   {
     pillarId: "movement",
     title: "Strength Training (3 sets)",
-    description: "Squat, push, pull. 3 sets each. Compound moves drive the most adaptation.",
+    description:
+      "Squat, push, pull. 3 sets each. Compound moves drive the most adaptation per minute.",
     duration: "20 min",
     difficulty: "hard",
     goalTags: ["fitness", "longevity", "weight"],
     fitnessLevels: ["intermediate", "advanced"],
+    evidenceKeys: ["resistance_training_longevity"],
+    signalHints: ["fitness level"],
+    baseConfidence: "high",
   },
 
   // ── COGNITION ──
   {
     pillarId: "cognition",
     title: "Gratitude Journaling",
-    description: "Write 3 things you're grateful for to boost serotonin and positive focus.",
+    description:
+      "Write 3 things you are grateful for to support positive affect and a calmer baseline.",
     duration: "3 min",
     difficulty: "easy",
     goalTags: ["stress", "focus"],
+    evidenceKeys: ["gratitude_affect"],
+    signalHints: ["mood"],
+    baseConfidence: "medium",
   },
   {
     pillarId: "cognition",
     title: "5-Min Box Breathing",
-    description: "4 sec inhale, 4 hold, 4 exhale, 4 hold. Calms the nervous system fast.",
+    description:
+      "4 sec inhale, 4 hold, 4 exhale, 4 hold. A simple paced breathing pattern that calms the nervous system.",
     duration: "5 min",
     difficulty: "easy",
     goalTags: ["stress", "focus", "sleep"],
+    evidenceKeys: ["box_breathing_vagal"],
+    signalHints: ["mood", "stress level"],
+    baseConfidence: "high",
   },
   {
     pillarId: "cognition",
     title: "90-Min Deep Work Block",
-    description: "One uninterrupted focus block. Phone in another room. Single tab. One task.",
+    description:
+      "One uninterrupted focus block. Phone in another room. Single tab. One task.",
     duration: "90 min",
     difficulty: "medium",
     goalTags: ["focus"],
+    evidenceKeys: ["ultradian_focus_block"],
+    signalHints: ["work schedule"],
+    baseConfidence: "medium",
   },
   {
     pillarId: "cognition",
     title: "Phone-Free First Hour",
-    description: "Don't touch your phone for the first hour after waking. Sets the tone for the day.",
+    description:
+      "Avoid your phone for the first hour after waking. Sets the tone for attention quality.",
     duration: "60 min",
     difficulty: "medium",
     goalTags: ["focus", "stress"],
+    evidenceKeys: ["phone_free_morning"],
+    signalHints: ["morning routine"],
+    baseConfidence: "low",
   },
 
   // ── RECOVERY ──
   {
     pillarId: "recovery",
     title: "Cold Water Face Splash",
-    description: "Splash cold water on your face to activate the vagus nerve and reduce morning cortisol.",
+    description:
+      "Splash cold water on your face as a brief morning alerting cue.",
     duration: "1 min",
     difficulty: "easy",
     goalTags: ["energy", "stress"],
+    evidenceKeys: ["cold_face_alerting"],
+    signalHints: ["energy level"],
+    baseConfidence: "low",
   },
   {
     pillarId: "recovery",
     title: "No Screens 1 Hour Before Bed",
-    description: "Blue light suppresses melatonin. Replace screens with reading, journaling, or stretching.",
+    description:
+      "Replace screens with reading, journaling, or stretching to protect evening melatonin.",
     duration: "60 min",
     difficulty: "medium",
     goalTags: ["sleep", "energy"],
+    evidenceKeys: ["no_screens_before_bed"],
+    signalHints: ["bedtime", "sleep duration"],
+    baseConfidence: "medium",
   },
   {
     pillarId: "recovery",
     title: "10-Min Morning Sunlight",
-    description: "Within 30 min of waking, get direct sunlight in your eyes to anchor your circadian rhythm.",
+    description:
+      "Within 30 minutes of waking, get direct outdoor sunlight to anchor your circadian rhythm.",
     duration: "10 min",
     difficulty: "easy",
     goalTags: ["sleep", "energy", "stress"],
+    evidenceKeys: ["morning_sunlight_circadian"],
+    signalHints: ["wake time", "morning routine"],
+    baseConfidence: "high",
   },
   {
     pillarId: "recovery",
-    title: "Cool the Bedroom (65-68°F)",
-    description: "Lower your bedroom temp tonight for deeper sleep. Even 2-3°F makes a difference.",
+    title: "Cool the Bedroom (18 to 20°C)",
+    description:
+      "Lower your bedroom temp tonight for deeper sleep. Even 1 to 2°C cooler can make a difference.",
     duration: "1 min",
     difficulty: "easy",
     goalTags: ["sleep"],
+    evidenceKeys: ["cool_bedroom_sleep"],
+    signalHints: ["sleep duration"],
+    baseConfidence: "medium",
   },
 
   // ── SUPPLEMENTS ──
   {
     pillarId: "supplements",
     title: "Morning Vitamin D3 + K2",
-    description: "Take D3 with a fat-containing meal. K2 directs calcium to bones, not arteries.",
+    description:
+      "Take D3 with a meal that contains fat. K2 supports calcium going to bones rather than soft tissue.",
     duration: "1 min",
     difficulty: "easy",
     goalTags: ["longevity", "energy"],
+    evidenceKeys: ["vit_d3_with_fat", "supplement_safety_general"],
+    signalHints: ["supplement routine"],
+    baseConfidence: "medium",
+    safetyNote:
+      "Check with a clinician if pregnant, managing a condition, or taking medications.",
   },
   {
     pillarId: "supplements",
     title: "Magnesium Glycinate (Evening)",
-    description: "200-400mg before bed for relaxation, sleep quality, and muscle recovery.",
+    description:
+      "200 to 400 mg magnesium glycinate in the evening to support relaxation and sleep quality.",
     duration: "1 min",
     difficulty: "easy",
     goalTags: ["sleep", "stress", "fitness"],
+    evidenceKeys: ["magnesium_glycinate_evening", "supplement_safety_general"],
+    signalHints: ["sleep duration", "mood"],
+    baseConfidence: "medium",
+    safetyNote:
+      "Check with a clinician if pregnant, managing a condition, or taking medications.",
   },
   {
     pillarId: "supplements",
     title: "Omega-3 (EPA/DHA)",
-    description: "Take with a meal. Look for 500mg+ EPA and 250mg+ DHA. Reduces inflammation.",
+    description:
+      "Take with a meal. Look for at least 500 mg EPA and 250 mg DHA per serving.",
     duration: "1 min",
     difficulty: "easy",
     goalTags: ["longevity", "focus"],
+    evidenceKeys: ["omega3_epa_dha", "supplement_safety_general"],
+    signalHints: ["meal timing"],
+    baseConfidence: "medium",
+    safetyNote:
+      "Check with a clinician if pregnant, managing a condition, or taking medications.",
   },
 ];
 
+/* ──────────────────────────────────────────────────────────
+   Selectors. Always return MicroAction-shaped templates with a
+   populated explanation block. Existing call sites that only
+   read title/description keep working unchanged.
+   ────────────────────────────────────────────────────────── */
+
+export type EnrichedTemplate = Omit<MicroAction, "id" | "completed">;
+
+interface PersonalizationContext {
+  goals?: string[];
+  fitnessLevel?: string;
+}
+
+function buildExplanation(
+  template: MicroActionTemplate,
+  ctx: PersonalizationContext,
+  isStarter: boolean
+): MicroActionExplanation {
+  const evidence: EvidenceReference[] = isStarter
+    ? getEvidence("starter_baseline", ...template.evidenceKeys.slice(0, 1))
+    : getEvidence(...template.evidenceKeys.slice(0, 2));
+
+  const signals: RecommendationSignal[] = isStarter
+    ? []
+    : (template.signalHints || []).slice(0, 3).map((label, idx) => ({
+        id: `${template.pillarId}-hint-${idx}`,
+        label,
+        sourceType: "estimate" as const,
+        freshness: "missing" as const,
+      }));
+
+  const matchedGoals =
+    ctx.goals?.filter((g) => template.goalTags.includes(g)) ?? [];
+
+  let rationale: string;
+  if (isStarter) {
+    rationale =
+      "Starter recommendation based on your selected goals. As Ooddle learns more about your routine, this will get more specific.";
+  } else if (matchedGoals.length > 0) {
+    const goalText = matchedGoals.slice(0, 2).join(" and ");
+    rationale = `Picked for your ${goalText} goal. Pairs well with your current routine.`;
+  } else if (ctx.fitnessLevel) {
+    rationale = `Matched to your ${ctx.fitnessLevel} fitness level.`;
+  } else {
+    rationale = "A reliable daily action across most routines.";
+  }
+
+  const confidence: ConfidenceLevel = isStarter ? "low" : template.baseConfidence;
+
+  return {
+    rationale,
+    signals,
+    evidence,
+    confidence,
+    ...(template.safetyNote ? { safetyNote: template.safetyNote } : {}),
+  };
+}
+
+function templateToEnriched(
+  template: MicroActionTemplate,
+  ctx: PersonalizationContext,
+  isStarter: boolean
+): EnrichedTemplate {
+  return {
+    pillarId: template.pillarId,
+    title: template.title,
+    description: template.description,
+    duration: template.duration,
+    difficulty: template.difficulty,
+    explanation: buildExplanation(template, ctx, isStarter),
+  };
+}
+
 // Default 5 actions (one per pillar, easiest variant) — used as a cold-start fallback.
-export const DEFAULT_MICRO_ACTIONS: Omit<MicroAction, "id" | "completed">[] = (() => {
+export const DEFAULT_MICRO_ACTIONS: EnrichedTemplate[] = (() => {
   const seen = new Set<string>();
   return MICRO_ACTION_LIBRARY.filter((a) => a.difficulty === "easy")
     .filter((a) => {
@@ -271,16 +451,13 @@ export const DEFAULT_MICRO_ACTIONS: Omit<MicroAction, "id" | "completed">[] = ((
       seen.add(a.pillarId);
       return true;
     })
-    .map(({ goalTags: _g, fitnessLevels: _f, ...rest }) => {
-      void _g;
-      void _f;
-      return rest;
-    });
+    .map((tpl) => templateToEnriched(tpl, {}, true));
 })();
 
 /**
  * Selects 5 personalized micro-actions (one per pillar) based on the user's
- * onboarding answers. Falls back to defaults when no preferences are set.
+ * onboarding answers, each carrying an explanation block. Falls back to
+ * defaults when no preferences are set.
  *
  * Scoring: +2 per matching goal tag, +3 for fitness-level match (-5 mismatch),
  * +1 baseline for easy actions when no preferences exist.
@@ -288,9 +465,17 @@ export const DEFAULT_MICRO_ACTIONS: Omit<MicroAction, "id" | "completed">[] = ((
 export function selectPersonalizedActions(
   goals: string[] = [],
   fitnessLevel: string = ""
-): Omit<MicroAction, "id" | "completed">[] {
-  const result: Omit<MicroAction, "id" | "completed">[] = [];
-  const pillarIds: PillarId[] = ["metabolic", "movement", "cognition", "recovery", "supplements"];
+): EnrichedTemplate[] {
+  const result: EnrichedTemplate[] = [];
+  const pillarIds: PillarId[] = [
+    "metabolic",
+    "movement",
+    "cognition",
+    "recovery",
+    "supplements",
+  ];
+  const ctx: PersonalizationContext = { goals, fitnessLevel };
+  const hasPrefs = goals.length > 0 || Boolean(fitnessLevel);
 
   for (const pillar of pillarIds) {
     const candidates = MICRO_ACTION_LIBRARY.filter((a) => a.pillarId === pillar);
@@ -313,10 +498,7 @@ export function selectPersonalizedActions(
     scored.sort((x, y) => y.score - x.score);
     const picked = scored[0];
     if (picked) {
-      const { goalTags: _g, fitnessLevels: _f, ...clean } = picked.action;
-      void _g;
-      void _f;
-      result.push(clean);
+      result.push(templateToEnriched(picked.action, ctx, !hasPrefs));
     }
   }
 
