@@ -1,14 +1,29 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { User, Mail, Target, Dumbbell, Apple, Moon, Shield, Bell, Palette } from "lucide-react";
-import { useStore } from "@/lib/store";
+import {
+  User,
+  Mail,
+  Target,
+  Dumbbell,
+  Apple,
+  Moon,
+  Shield,
+  Bell,
+  Palette,
+  Activity,
+  Smartphone,
+  Watch,
+  Plus,
+} from "lucide-react";
+import { useStore, HealthDataSource } from "@/lib/store";
 import {
   ONBOARDING_GOALS,
   FITNESS_LEVELS,
   DIETARY_PREFERENCES,
   SLEEP_PATTERNS,
 } from "@/lib/constants";
+import { LogSignalDialog } from "../dashboard/LogSignalDialog";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -186,10 +201,49 @@ export default function ProfilePage() {
         </div>
       </motion.div>
 
-      {/* App info */}
+      {/* Health data sources */}
       <motion.div
         variants={fadeUp}
         custom={4}
+        style={{
+          background: "var(--surface-0)",
+          borderRadius: "var(--radius-lg)",
+          padding: "28px",
+          border: "1px solid var(--border-light)",
+          marginBottom: 20,
+        }}
+      >
+        <h3
+          style={{
+            fontFamily: "var(--font-display)",
+            fontSize: 17,
+            fontWeight: 700,
+            marginBottom: 6,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <Activity size={18} style={{ color: "var(--ooddle-primary)" }} />
+          Health data
+        </h3>
+        <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 16 }}>
+          Ooddle uses your signals to personalize today&apos;s plan. Start with manual logging. Apple Health and Health Connect light up with the mobile app.
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {(state.healthDataSources || []).map((source) => (
+            <HealthSourceCard key={source.id} source={source} />
+          ))}
+        </div>
+        <p style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 14 }}>
+          Ooddle is for general wellness and education, not medical advice. Health data is stored on this device and is never used for ads.
+        </p>
+      </motion.div>
+
+      {/* App info */}
+      <motion.div
+        variants={fadeUp}
+        custom={5}
         style={{
           background: "var(--surface-0)",
           borderRadius: "var(--radius-lg)",
@@ -268,6 +322,137 @@ function ProfileField({ icon, label, value }: { icon: React.ReactNode; label: st
         </span>
       </div>
       <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>{value}</div>
+    </div>
+  );
+}
+
+function statusMeta(status: HealthDataSource["status"]): {
+  label: string;
+  tone: "ok" | "pending" | "off" | "warn";
+} {
+  switch (status) {
+    case "available":
+      return { label: "Available", tone: "ok" };
+    case "connected":
+      return { label: "Connected", tone: "ok" };
+    case "coming_soon":
+      return { label: "Coming with mobile", tone: "pending" };
+    case "not_available":
+      return { label: "Not available on web", tone: "off" };
+    case "error":
+      return { label: "Error", tone: "warn" };
+    default:
+      return { label: status, tone: "off" };
+  }
+}
+
+function statusStyle(tone: "ok" | "pending" | "off" | "warn") {
+  if (tone === "ok") return { color: "rgba(6, 95, 70, 1)", bg: "rgba(16, 185, 129, 0.12)" };
+  if (tone === "pending") return { color: "rgba(120, 53, 15, 1)", bg: "rgba(245, 158, 11, 0.12)" };
+  if (tone === "warn") return { color: "rgba(180, 30, 30, 1)", bg: "rgba(220, 38, 38, 0.10)" };
+  return { color: "var(--text-tertiary)", bg: "var(--surface-1, rgba(0,0,0,0.04))" };
+}
+
+function sourceMeta(type: HealthDataSource["type"]): {
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+} {
+  if (type === "manual") {
+    return {
+      title: "Manual entry",
+      description: "Log steps, sleep, mood, energy, water, and protein from any device.",
+      icon: <Plus size={18} aria-hidden="true" />,
+    };
+  }
+  if (type === "apple_health") {
+    return {
+      title: "Apple Health",
+      description: "Sync activity, sleep, and heart data from iPhone and Apple Watch.",
+      icon: <Watch size={18} aria-hidden="true" />,
+    };
+  }
+  return {
+    title: "Health Connect",
+    description: "Sync Android wearables, scales, and partner apps via Google Health Connect.",
+    icon: <Smartphone size={18} aria-hidden="true" />,
+  };
+}
+
+function HealthSourceCard({ source }: { source: HealthDataSource }) {
+  const meta = sourceMeta(source.type);
+  const status = statusMeta(source.status);
+  const style = statusStyle(status.tone);
+  const isManualAvailable = source.type === "manual" && source.status === "available";
+
+  return (
+    <div
+      role="group"
+      aria-label={`${meta.title} health data source. Status: ${status.label}`}
+      style={{
+        padding: "14px 16px",
+        borderRadius: "var(--radius-md)",
+        background: "var(--surface-1)",
+        border: "1px solid var(--border-light)",
+        display: "flex",
+        alignItems: "flex-start",
+        gap: 12,
+      }}
+    >
+      <div
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: "var(--radius-md)",
+          background: "var(--surface-0)",
+          border: "1px solid var(--border-light)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+          color: "var(--text-secondary)",
+        }}
+      >
+        {meta.icon}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 2 }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>{meta.title}</span>
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              padding: "2px 8px",
+              borderRadius: "var(--radius-full)",
+              background: style.bg,
+              color: style.color,
+              textTransform: "uppercase",
+              letterSpacing: "0.04em",
+            }}
+          >
+            {status.label}
+          </span>
+        </div>
+        <p style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5, margin: 0 }}>{meta.description}</p>
+        {source.lastSyncedAt && (
+          <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 4 }}>
+            Last sync: {new Date(source.lastSyncedAt).toLocaleString()}
+          </div>
+        )}
+        {source.permissions && source.permissions.length > 0 && (
+          <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 4 }}>
+            Permissions: {source.permissions.join(", ")}
+          </div>
+        )}
+        {source.errorMessage && (
+          <div style={{ fontSize: 11, color: "rgba(180, 30, 30, 1)", marginTop: 4 }}>{source.errorMessage}</div>
+        )}
+        {isManualAvailable && (
+          <div style={{ marginTop: 10 }}>
+            <LogSignalDialog />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
