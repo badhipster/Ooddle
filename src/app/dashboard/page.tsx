@@ -5,6 +5,8 @@ import { Flame, Trophy, Calendar, TrendingUp } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { PILLARS, PillarId } from "@/lib/constants";
 import { MicroActionCard, fadeUp } from "./MicroActionCard";
+import { LogSignalDialog } from "./LogSignalDialog";
+import { TodaySignals } from "./TodaySignals";
 
 export default function DashboardPage() {
   const { state, toggleAction } = useStore();
@@ -201,10 +203,30 @@ export default function DashboardPage() {
         </div>
       </motion.div>
 
+      {/* Signals strip */}
+      <motion.div variants={fadeUp} custom={2} style={{ marginBottom: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 10 }}>
+          <h2
+            style={{
+              fontFamily: "var(--font-display)",
+              fontSize: 14,
+              fontWeight: 700,
+              color: "var(--text-secondary)",
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+            }}
+          >
+            Your signals
+          </h2>
+          <LogSignalDialog />
+        </div>
+        <TodaySignals />
+      </motion.div>
+
       {/* Section header */}
       <motion.div
         variants={fadeUp}
-        custom={2}
+        custom={3}
         style={{
           display: "flex",
           alignItems: "center",
@@ -230,7 +252,7 @@ export default function DashboardPage() {
         {state.todayActions.map((action, i) => {
           const pillar = PILLARS[action.pillarId as PillarId];
           return (
-            <motion.div key={action.id} variants={fadeUp} custom={i + 3}>
+            <motion.div key={action.id} variants={fadeUp} custom={i + 4}>
               <MicroActionCard
                 action={action}
                 pillar={pillar}
