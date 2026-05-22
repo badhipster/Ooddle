@@ -222,13 +222,14 @@ async function* streamCompletion(
 
 /* ── POST handler ── */
 export async function POST(req: NextRequest) {
+  const cors = corsHeaders(req);
   let body: ChatRequest;
   try {
     body = await req.json();
   } catch {
     return new Response(JSON.stringify({ error: "Invalid JSON" }), {
       status: 400,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...cors },
     });
   }
 
@@ -243,7 +244,7 @@ export async function POST(req: NextRequest) {
   if (!message || typeof message !== "string" || message.trim().length === 0) {
     return new Response(JSON.stringify({ error: "Message required" }), {
       status: 400,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...cors },
     });
   }
 
@@ -284,6 +285,44 @@ export async function POST(req: NextRequest) {
       "Content-Type": "text/plain; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
       "X-Accel-Buffering": "no",
+      ...corsHeaders(req),
     },
+  });
+}
+
+/* ── CORS ── */
+const ALLOWED_ORIGINS = new Set<string>([
+  "https://oodle-mobile.vercel.app",
+  "https://ooddle.vercel.app",
+  "http://localhost:3000",
+  "http://localhost:4000",
+  "http://localhost:8081",
+]);
+
+function corsHeaders(req: NextRequest): Record<string, string> {
+  const origin = req.headers.get("origin") ?? "";
+  // Allow any vercel preview URL on the project plus local dev plus the two
+  // canonical hosts. Falls back to "*" only when no Origin is sent (server-to-server).
+  const allow =
+    ALLOWED_ORIGINS.has(origin) || origin.endsWith(".vercel.app")
+      ? origin
+      : origin === ""
+      ? "*"
+      : "";
+  return allow
+    ? {
+        "Access-Control-Allow-Origin": allow,
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "content-type",
+        "Access-Control-Max-Age": "86400",
+        Vary: "Origin",
+      }
+    : {};
+}
+
+export async function OPTIONS(req: NextRequest) {
+  return new Response(null, {
+    status: 204,
+    headers: corsHeaders(req),
   });
 }
